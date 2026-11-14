@@ -1,0 +1,25 @@
+# OPTIONAL. Only needed for PostgreSQL mode. SQLite local mode does not use Docker at all.
+# Requires Docker Desktop running (on Windows that needs WSL 2). Reads settings from .env;
+# see "Option B" in .env.example.
+services:
+  postgres:
+    image: postgres:16
+    container_name: modelmind-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:?Uncomment the PostgreSQL block (Option B) in .env first}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Uncomment the PostgreSQL block (Option B) in .env first}
+      POSTGRES_DB: ${POSTGRES_DB:-modelmind}
+    ports:
+      - "127.0.0.1:${POSTGRES_PORT:-5432}:5432"   # bound to localhost only
+    volumes:
+      - modelmind_pgdata:/var/lib/postgresql/data
+      - ./docker/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB:-modelmind}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  modelmind_pgdata:

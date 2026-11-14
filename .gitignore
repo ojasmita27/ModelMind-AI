@@ -1,0 +1,35 @@
+# secrets and local state
+.env
+.env.local
+data/
+*.db
+*.sqlite3
+storage_data/
+mlruns/
+
+# python
+.venv/
+venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+*.egg-info/
+
+# node
+node_modules/
+dist/
+*.tsbuildinfo
+npm-debug.log*
+
+# editor
+.vscode/*
+!.vscode/settings.json
+!.vscode/extensions.json
+
+# all environment secrets
+.env.*
+!.env.example
+!frontend/.env.example
+*.sqlite
