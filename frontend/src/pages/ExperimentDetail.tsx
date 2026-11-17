@@ -7,7 +7,12 @@ import {
   getExperimentArtifact,
   getExperimentEvaluation,
   getExperimentReproducibility,
+  getGlobalExplain,
+  getLocalExplain,
 } from "../api/experiments";
+import type { GlobalExplain, LocalExplain } from "../api/experiments";
+import { getWhatIfSchema } from "../api/whatif";
+import type { WhatIfSchema } from "../api/whatif";
 import { getProject } from "../api/projects";
 import type {
   Experiment,
@@ -393,6 +398,11 @@ export default function ExperimentDetail() {
         </Card>
       )}
 
+      {/* H. Explainability */}
+      {experiment.status === "completed" && experiment.artifact_uri && (
+        <ExplainabilityCard projectId={projectId ?? ""} experimentId={experiment.id ?? ""} />
+      )}
+
       {/* G. Empty evaluation state */}
       {experiment.status === "completed" && evaluation.models.length === 0 && (
         <EmptyState icon="flask" title="No evaluation results">
@@ -400,5 +410,119 @@ export default function ExperimentDetail() {
         </EmptyState>
       )}
     </>
+  );
+}
+
+/* ---------------- Explainability ---------------- */
+
+const METHOD_LABELS: Record<string, string> = {
+  shap_treeexplainer: "SHAP (TreeExplainer)",
+  shap_treeexplainer_transformed: "SHAP (TreeExplainer, transformed features)",
+  permutation_importance: "Permutation importance",
+  leave_one_feature_out: "Perturbation-based local explanation",
+};
+
+function ExplainabilityCard({ projectId, experimentId }: { projectId: string; experimentId: string }) {
+  const [explain, setExplain] = useState<GlobalExplain | null>(null);
+  const [status, setStatus] = useState<"loading" | "ready" | "error">("loading");
+  const [local, setLocal] = useState<LocalExplain | null>(null);
+  const [localStatus, setLocalStatus] = useState<"idle" | "loading" | "ready" | "error">("idle");
+  const [schema, setSchema] = useState<WhatIfSchema | null>(null);
+  const [values, setValues] = useState<Record<string, string>>({});
+
+  useEffect(() => {
+    const c = new AbortController();
+    getGlobalExplain(projectId, experimentId, c.signal)
+      .then((d) => { if (!c.signal.aborted) { setExplain(d); setStatus("ready"); } })
+      .catch(() => { if (!c.signal.aborted) setStatus("error"); });
+    return () => c.abort();
+  }, [projectId, experimentId]);
+
+  const ranked = explain ? Object.entries(explain.importances).sort((a, b) => Math.abs(b[1]) - Math.abs(a[1])) : [];
+  const maxAbs = ranked.length ? Math.max(...ranked.map(([, v]) => Math.abs(v))) : 1;
+
+  const openLocal = async () => {
+    setLocalStatus("loading");
+    try {
+      if (!schema) {
+        const s = await getWhatIfSchema(projectId, experimentId);
+        setSchema(s);
+        const init: Record<string, string> = {};
+        for (const f of s.features) {
+          init[f.name] = f.median != null ? String(f.median) : f.categories?.[0] ?? "";
+        }
+        setValues(init);
+      }
+      const feats: Record<string, unknown> = {};
+      for (const [k, v] of Object.entries(values)) {
+        const num = Number(v);
+        feats[k] = v !== "" && !Number.isNaN(num) ? num : v;
+      }
+      setLocal(await getLocalExplain(projectId, experimentId, feats));
+      setLocalStatus("ready");
+    } catch {
+      setLocalStatus("error");
+    }
+  };
+
+  if (status === "loading") return <Card className="mb-6 p-5"><Spinner label="Computing explanations…" /></Card>;
+  if (status === "error" || !explain) return <Card className="mb-6 p-5"><ErrorBanner message="Could not compute explanations for this experiment." /></Card>;
+
+  return (
+    <Card className="mb-6 p-5">
+      <div className="flex flex-wrap items-center gap-2">
+        <h2 className="text-sm font-semibold text-ivory-100">Explainability</h2>
+        <Badge tone="info">{METHOD_LABELS[explain.method] ?? explain.method}</Badge>
+        <span className="text-xs text-surface-500">{explain.background_samples} background samples · {explain.feature_count} features</span>
+      </div>
+      {explain.notes.map((n, i) => <p key={i} className="mt-1 text-xs text-warn-400">{n}</p>)}
+      <div className="mt-4 space-y-1.5">
+        {ranked.map(([name, v]) => (
+          <div key={name} className="flex items-center gap-2 text-xs">
+            <span className="w-40 truncate text-ivory-300">{name}</span>
+            <div className="h-3 rounded bg-surface-800" style={{ width: `${Math.max(2, (Math.abs(v) / maxAbs) * 60)}%`, background: "var(--color-accent-500, #a8d632)" }} />
+            <span className="font-mono text-surface-400">{v.toFixed(4)}</span>
+          </div>
+        ))}
+      </div>
+      <p className="mt-3 text-xs text-surface-500">{explain.disclaimer}</p>
+
+      <div className="mt-5 border-t border-surface-800 pt-4">
+        <div className="flex items-center gap-3">
+          <h3 className="text-xs font-semibold uppercase text-surface-400">Local explanation</h3>
+          <button onClick={() => void openLocal()} disabled={localStatus === "loading"}
+            className="rounded border border-chartreuse-500/50 px-3 py-1 text-xs text-chartreuse-300 hover:bg-chartreuse-500/10 disabled:opacity-50">
+            {localStatus === "loading" ? "Explaining…" : "Explain a prediction"}
+          </button>
+        </div>
+        {localStatus === "ready" && local && (
+          <div className="mt-3">
+            <p className="text-xs text-surface-400">Prediction: <span className="font-mono text-ivory-100">{JSON.stringify(local.prediction)}</span></p>
+            <div className="mt-2 space-y-1">
+              {local.contributions.map((c) => (
+                <div key={c.feature} className="flex items-center gap-2 text-xs">
+                  <span className="w-40 truncate text-ivory-300">{c.feature}</span>
+                  <span className="font-mono text-surface-400">{String(c.value)} → {String(c.replacement)}</span>
+                  <span className="ml-auto font-mono text-chartreuse-300">Δ {c.delta.toFixed(4)}</span>
+                </div>
+              ))}
+            </div>
+            <p className="mt-2 text-xs text-surface-500">{local.disclaimer} Method: {METHOD_LABELS[local.method] ?? local.method}.</p>
+          </div>
+        )}
+        {localStatus === "error" && <p className="mt-2 text-xs text-danger-400">Local explanation failed.</p>}
+        {localStatus !== "idle" && schema && (
+          <div className="mt-3 grid max-h-48 grid-cols-2 gap-2 overflow-y-auto sm:grid-cols-3">
+            {schema.features.map((f) => (
+              <label key={f.name} className="text-xs text-surface-400">
+                {f.name}
+                <input value={values[f.name] ?? ""} onChange={(e) => setValues((v) => ({ ...v, [f.name]: e.target.value }))}
+                  className="mt-0.5 w-full rounded border border-surface-700 bg-surface-900 px-2 py-1 text-ivory-100" />
+              </label>
+            ))}
+          </div>
+        )}
+      </div>
+    </Card>
   );
 }

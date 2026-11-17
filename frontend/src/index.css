@@ -32,6 +32,13 @@
   --color-accent-500: #8bb816;
   --color-accent-600: #6b9a00;
 
+  /* chartreuse aliases — legacy class names used across pages map to the accent palette */
+  --color-chartreuse-200: #d8f58a;
+  --color-chartreuse-300: #c8f068;
+  --color-chartreuse-400: #a8d632;
+  --color-chartreuse-500: #8bb816;
+  --color-chartreuse-600: #6b9a00;
+
   /* Muted steel-blue secondary */
   --color-steel-300: #94a3b8;
   --color-steel-400: #64748b;

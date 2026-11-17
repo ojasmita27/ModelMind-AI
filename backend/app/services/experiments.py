@@ -21,6 +21,26 @@ from app.storage import LocalObjectStorage
 log = get_logger("experiments")
 
 
+_PREPROCESSING_DEFAULTS = {
+    "numeric_impute": "median",
+    "numeric_scale": "standard",
+    "categorical_impute": "most_frequent",
+    "categorical_encode": "onehot",
+}
+
+
+def _effective_preprocessing(raw) -> dict | None:
+    """Return the preprocessing config that build_preprocessor will actually use.
+
+    User-supplied values win; documented defaults are filled in so the stored
+    record reflects the real pipeline (previously ``None`` meant 'defaults',
+    which was indistinguishable from 'not recorded')."""
+    cfg = dict(_PREPROCESSING_DEFAULTS)
+    if isinstance(raw, dict):
+        cfg.update({k: v for k, v in raw.items() if v is not None})
+    return cfg
+
+
 def _verify_persisted_artifacts(storage: LocalObjectStorage, experiment_id: uuid.UUID, model_key: str, manifest_key: str) -> None:
     if not storage.exists(model_key):
         raise RuntimeError(f"Model file write failed: {model_key} not found after storage.put()")
@@ -302,7 +322,7 @@ def create_experiment(db: Session, owner_id: uuid.UUID, project_id: uuid.UUID, p
         test_fraction=config.test_fraction,
         random_seed=config.random_seed,
         model_names=list(model_names),
-        preprocessing_config=payload.get("preprocessing") if isinstance(payload.get("preprocessing"), dict) else None,
+        preprocessing_config=_effective_preprocessing(payload.get("preprocessing")),
         tuning_config=payload.get("tuning") if isinstance(payload.get("tuning"), dict) else None,
         status="queued",
     )

@@ -202,7 +202,10 @@ def test_experiment_accepts_and_persists_preprocessing_config(client, alice):
     r = client.post(f"{P}/{project['id']}/experiments", json=payload, headers=alice)
     assert r.status_code == 201, r.text
     body = r.json()
-    assert body["preprocessing_config"] == {"numeric_impute": "mean", "numeric_scale": "minmax"}
+    # User values win; documented defaults are merged in for reproducibility.
+    pc = body["preprocessing_config"]
+    assert pc["numeric_impute"] == "mean" and pc["numeric_scale"] == "minmax"
+    assert pc["categorical_encode"] == "onehot"
 
     detail = client.get(f"{P}/{project['id']}/experiments/{body['id']}", headers=alice)
     assert detail.status_code == 200

@@ -80,6 +80,39 @@ export function getVersionIntelligence(
   return request<DatasetIntelligence>(`${versionBase(projectId, datasetId, versionId)}/intelligence${qs}`, { signal });
 }
 
+export interface DatasetFinding {
+  id: string;
+  category: string;
+  method: string;
+  columns: string[];
+  affected_rows: number | null;
+  affected_pct: number | null;
+  severity: "critical" | "warning" | "info";
+  evidence: string;
+  confidence: string;
+  explanation: string;
+  recommendation: string;
+}
+
+export interface VersionFindings {
+  dataset_version_id: string;
+  row_count: number;
+  findings: DatasetFinding[];
+  severity_summary: Record<string, number>;
+  note: string;
+}
+
+export function getVersionFindings(
+  projectId: string,
+  datasetId: string,
+  versionId: string,
+  targetColumn?: string,
+  signal?: AbortSignal,
+) {
+  const qs = targetColumn ? `?target_column=${encodeURIComponent(targetColumn)}` : "";
+  return request<VersionFindings>(`${versionBase(projectId, datasetId, versionId)}/findings${qs}`, { signal });
+}
+
 export function getVersionPreview(
   projectId: string,
   datasetId: string,

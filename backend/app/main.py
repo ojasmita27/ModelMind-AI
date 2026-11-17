@@ -7,7 +7,7 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 
 from app import __version__
-from app.api.routers import auth, benchmarks, copilot, datasets, deployments, experiments, health, models, monitoring, projects, trust
+from app.api.routers import auth, benchmarks, copilot, datasets, deployments, experiments, health, models, monitoring, projects, trust, explain
 from app.core.errors import register_error_handlers
 from app.core.logging import configure_logging, get_logger, log_event, request_id_ctx
 from app.core.startup import diagnose_database, load_settings_or_exit
@@ -90,6 +90,7 @@ def create_app() -> FastAPI:
     app.include_router(deployments.router, prefix=API_PREFIX)
     app.include_router(monitoring.router, prefix=API_PREFIX)
     app.include_router(trust.router, prefix=API_PREFIX)
+    app.include_router(explain.router, prefix=API_PREFIX)
     return app
 
 

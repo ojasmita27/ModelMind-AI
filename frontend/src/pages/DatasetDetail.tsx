@@ -5,9 +5,11 @@ import { useDataset } from "../features/datasets/useDatasets";
 import {
   applyCleaning,
   cleanPreview,
+  getVersionFindings,
   getVersionIntelligence,
   getVersionPreview,
 } from "../api/datasets";
+import type { VersionFindings } from "../api/datasets";
 import type {
   CleaningOps,
   CleanPreview,
@@ -18,11 +20,12 @@ import type {
 import { ApiError } from "../api/client";
 import { Icon } from "../components/icons";
 
-type Tab = "overview" | "columns" | "preview" | "clean" | "versions";
+type Tab = "overview" | "columns" | "findings" | "preview" | "clean" | "versions";
 
 const TABS: { id: Tab; label: string }[] = [
   { id: "overview", label: "Overview" },
   { id: "columns", label: "Columns" },
+  { id: "findings", label: "Findings" },
   { id: "preview", label: "Preview" },
   { id: "clean", label: "Clean" },
   { id: "versions", label: "Versions" },
@@ -115,6 +118,8 @@ export default function DatasetDetail() {
         <OverviewTab projectId={projectId} datasetId={datasetId} versionId={activeVersion.id} />
       ) : tab === "columns" ? (
         <ColumnsTab projectId={projectId} datasetId={datasetId} versionId={activeVersion.id} />
+      ) : tab === "findings" ? (
+        <FindingsTab projectId={projectId} datasetId={datasetId} versionId={activeVersion.id} />
       ) : tab === "preview" ? (
         <PreviewTab projectId={projectId} datasetId={datasetId} versionId={activeVersion.id} />
       ) : tab === "clean" ? (
@@ -278,6 +283,66 @@ function OverviewTab({ projectId, datasetId, versionId }: { projectId: string; d
         Refresh intelligence
       </button>
       <span className="ml-2 hidden text-xs text-surface-500">(recomputes from the stored CSV)</span>
+    </div>
+  );
+}
+
+/* ---------------- Findings ---------------- */
+
+const SEV_TONE: Record<string, "live" | "warn" | "info"> = { critical: "warn", warning: "warn", info: "info" };
+
+function FindingsTab({ projectId, datasetId, versionId }: { projectId: string; datasetId: string; versionId: string }) {
+  const [data, setData] = useState<VersionFindings | null>(null);
+  const [status, setStatus] = useState<"loading" | "ready" | "error">("loading");
+  const [error, setError] = useState<string | null>(null);
+  const [retry, setRetry] = useState(0);
+
+  useEffect(() => {
+    const c = new AbortController();
+    setStatus("loading");
+    getVersionFindings(projectId, datasetId, versionId, undefined, c.signal)
+      .then((d) => { if (!c.signal.aborted) { setData(d); setStatus("ready"); setError(null); } })
+      .catch((e) => { if (!c.signal.aborted) { setStatus("error"); setError(e instanceof ApiError ? e.message : "Could not load findings."); } });
+    return () => c.abort();
+  }, [projectId, datasetId, versionId, retry]);
+
+  if (status === "loading") return <div className="py-10 text-center"><Spinner label="Computing findings…" /></div>;
+  if (status === "error") return <ErrorBanner message={error ?? "Could not load findings."} onRetry={() => setRetry((r) => r + 1)} />;
+  if (!data) return null;
+
+  const s = data.severity_summary;
+  return (
+    <div className="space-y-4">
+      <Card className="p-4">
+        <div className="flex flex-wrap items-center gap-4 text-sm">
+          <span className="text-ivory-200">{data.row_count.toLocaleString()} rows analyzed</span>
+          <Badge tone="warn">{s.warning ?? 0} warnings</Badge>
+          <Badge tone="live">{s.info ?? 0} info</Badge>
+          {(s.critical ?? 0) > 0 && <Badge tone="warn">{s.critical} critical</Badge>}
+          <span className="ml-auto text-xs text-surface-500">{data.note}</span>
+        </div>
+      </Card>
+      {data.findings.length === 0 ? (
+        <Card className="p-6 text-sm text-ivory-300">No findings — dataset looks clean on the checked heuristics.</Card>
+      ) : (
+        data.findings.map((f) => (
+          <Card key={f.id} className="p-4">
+            <div className="flex flex-wrap items-center gap-2">
+              <Badge tone={SEV_TONE[f.severity] ?? "info"}>{f.severity}</Badge>
+              <span className="font-medium text-ivory-100">{f.category.replace(/_/g, " ")}</span>
+              <span className="text-xs text-surface-500">{f.method}</span>
+            </div>
+            <p className="mt-2 text-sm text-ivory-300">{f.evidence}</p>
+            <p className="mt-1 text-sm text-surface-400">{f.explanation}</p>
+            <p className="mt-1 text-xs text-chartreuse-300">→ {f.recommendation}</p>
+            <div className="mt-2 flex flex-wrap gap-1">
+              {f.columns.map((c) => <Badge key={c} tone="info">{c}</Badge>)}
+              {f.affected_pct != null && <span className="text-xs text-surface-500">{f.affected_pct}% of rows affected</span>}
+              <span className="text-xs text-surface-500">confidence: {f.confidence}</span>
+            </div>
+          </Card>
+        ))
+      )}
     </div>
   );
 }

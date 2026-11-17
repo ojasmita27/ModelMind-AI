@@ -191,6 +191,36 @@ def get_version_intelligence(
     return compute_intelligence(frame, target_column)
 
 
+@router.get("/{dataset_id}/versions/{version_id}/findings")
+def get_version_findings(
+    project_id: uuid.UUID,
+    dataset_id: uuid.UUID,
+    version_id: uuid.UUID,
+    user: CurrentUser,
+    db: DbSession,
+    target_column: str | None = None,
+):
+    """Structured, evidence-graded dataset findings derived from live profiling."""
+    from app.intelligence.profile import compute_intelligence
+    from app.services.findings import build_findings, severity_summary
+
+    version = _owned_version(project_id, dataset_id, version_id, user, db)
+    if version.job_status != "completed":
+        raise HTTPException(status_code=409, detail="Dataset version is not ready yet.")
+    frame = _load_version_frame(version)
+    if target_column and target_column not in frame.columns:
+        raise HTTPException(status_code=422, detail=f"Target column '{target_column}' not found in dataset.")
+    profile = compute_intelligence(frame, target_column)
+    findings = build_findings(profile, len(frame))
+    return {
+        "dataset_version_id": str(version_id),
+        "row_count": len(frame),
+        "findings": findings,
+        "severity_summary": severity_summary(findings),
+        "note": "Findings are statistical heuristics for investigation — they do not prove label errors or leakage.",
+    }
+
+
 @router.get("/{dataset_id}/versions/{version_id}/preview", response_model=PaginatedPreviewOut)
 def preview_version_paginated(
     project_id: uuid.UUID,

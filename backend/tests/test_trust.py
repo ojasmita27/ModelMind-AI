@@ -48,7 +48,9 @@ def test_receipt_generation_and_verify(client, alice):
     assert p["configuration"]["random_seed"] == 42
     assert p["model_results"] and p["model_results"][0]["model_name"]
     assert "scikit-learn" in p["environment"]["packages"]
-    assert p["explainability"]["available"] is False  # honest: no SHAP stored
+    assert p["explainability"]["available"] is True
+    assert "shap_treeexplainer" in p["explainability"]["methods"][0]
+    assert p["explainability"]["computed_on_demand"] is True
 
     # Idempotent: second POST returns same receipt.
     r2 = client.post(f"{P}/{project['id']}/experiments/{exp['id']}/trust-receipt", headers=alice)

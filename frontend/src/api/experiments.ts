@@ -42,3 +42,39 @@ export function getExperimentArtifact(projectId: string, experimentId: string, s
     { signal },
   );
 }
+
+export interface GlobalExplain {
+  experiment_id: string;
+  method: string;
+  background_samples: number;
+  feature_count: number;
+  importances: Record<string, number>;
+  notes: string[];
+  disclaimer: string;
+}
+
+export interface LocalExplainContribution {
+  feature: string;
+  value: unknown;
+  replacement: unknown;
+  delta: number;
+}
+
+export interface LocalExplain {
+  experiment_id: string;
+  method: string;
+  prediction: unknown;
+  contributions: LocalExplainContribution[];
+  disclaimer: string;
+}
+
+export function getGlobalExplain(projectId: string, experimentId: string, signal?: AbortSignal) {
+  return request<GlobalExplain>(
+    `/projects/${projectId}/experiments/${encodeURIComponent(experimentId)}/explain/global`, { signal });
+}
+
+export function getLocalExplain(projectId: string, experimentId: string, features: Record<string, unknown>) {
+  return request<LocalExplain>(
+    `/projects/${projectId}/experiments/${encodeURIComponent(experimentId)}/explain/local`,
+    { method: "POST", body: { features } });
+}

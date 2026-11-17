@@ -159,7 +159,18 @@ def build_payload(db: Session, experiment: Experiment) -> dict[str, Any]:
         } for r in results],
         "artifact": _artifact_evidence(experiment, storage),
         "manifest": _manifest_evidence(experiment, storage),
-        "explainability": {"available": False, "note": "No SHAP/explainability results stored for this experiment."},
+        "explainability": {
+            "available": bool(experiment.artifact_uri and experiment.status == "completed"),
+            "methods": ["shap_treeexplainer (tree models)", "permutation_importance", "leave_one_feature_out"],
+            "computed_on_demand": True,
+            "endpoints": [
+                f"/projects/{experiment.project_id}/experiments/{experiment.id}/explain/global",
+                f"/projects/{experiment.project_id}/experiments/{experiment.id}/explain/local",
+                f"/projects/{experiment.project_id}/experiments/{experiment.id}/explain/dependence/{{feature}}",
+            ],
+            "note": "Explanations are computed on demand via /explain endpoints; SHAP values are only produced for supported tree models. "
+                    "Explanations describe model behavior, not causal relationships.",
+        },
         "environment": {"packages": _env_versions(), "generated_at": datetime.now(timezone.utc).isoformat()},
     }
 

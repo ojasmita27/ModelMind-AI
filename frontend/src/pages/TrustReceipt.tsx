@@ -189,6 +189,9 @@ export default function TrustReceiptPage() {
                 <h3 className="text-sm font-semibold text-ivory-100">Experiment evidence</h3>
                 <div className="mt-2 text-xs text-surface-300">
                   seed {p?.configuration?.random_seed} · splits {JSON.stringify(p?.configuration?.splits)} · best model {p?.training?.best_model_name ?? "—"}
+                  {" · "}preprocessing: {p?.configuration?.preprocessing_config
+                    ? JSON.stringify(p.configuration.preprocessing_config)
+                    : "not recorded (historical experiment — training defaults were used)"}
                 </div>
                 <div className="mt-2 space-y-1">
                   {(p?.model_results ?? []).map((m: any, i: number) => (
@@ -199,7 +202,9 @@ export default function TrustReceiptPage() {
                   ))}
                 </div>
                 <div className="mt-2 text-[11px] text-surface-500">
-                  explainability: {p?.explainability?.available ? "available" : p?.explainability?.note}
+                  explainability: {p?.explainability?.available
+                    ? `available on demand — ${(p?.explainability?.methods ?? []).join(", ")}`
+                    : (p?.explainability?.note ?? "unavailable")}
                 </div>
               </Card>
             </>
